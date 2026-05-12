@@ -1,58 +1,118 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# Pokédex ORM — Laboratorio Laravel + Eloquent
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+Modelado de un dominio Pokémon usando Laravel 13 y Eloquent ORM. Incluye 11 tablas con relaciones (`hasMany`, `belongsTo`, `belongsToMany`), seeders que pueblan la base con datos reales de [PokéAPI](https://pokeapi.co/), y consultas demo que ilustran el uso de eager loading para evitar el problema N+1.
 
-## About Laravel
+## Dominio modelado
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+- **Pokémon** con sus stats, generación y región de origen
+- **Tipos** (fuego, agua, dragón…) — relación muchos a muchos
+- **Habilidades** que pueden ser normales o ocultas — muchos a muchos
+- **Movimientos** que cada pokémon puede aprender — muchos a muchos con `learn_level`
+- **Entrenadores** con sus equipos de hasta 6 pokémon — muchos a muchos con `nickname` y `level`
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+## Requisitos
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+- Docker Desktop
+- WSL2 (si estás en Windows)
+- Git
 
-## Learning Laravel
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
-
-In addition, [Laracasts](https://laracasts.com) contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
-
-You can also watch bite-sized lessons with real-world projects on [Laravel Learn](https://laravel.com/learn), where you will be guided through building a Laravel application from scratch while learning PHP fundamentals.
-
-## Agentic Development
-
-Laravel's predictable structure and conventions make it ideal for AI coding agents like Claude Code, Cursor, and GitHub Copilot. Install [Laravel Boost](https://laravel.com/docs/ai) to supercharge your AI workflow:
+## Instalación
 
 ```bash
-composer require laravel/boost --dev
+# 1. Clonar el repositorio
+git clone https://github.com/hmndz3/ORMBD.git
+cd ORMBD
 
-php artisan boost:install
+# 2. Instalar dependencias de PHP usando un contenedor temporal
+docker run --rm \
+    -u "$(id -u):$(id -g)" \
+    -v "$(pwd):/var/www/html" \
+    -w /var/www/html \
+    laravelsail/php85-composer:latest \
+    composer install --ignore-platform-reqs
+
+# 3. Copiar el archivo de entorno y generar la APP_KEY
+cp .env.example .env
+./vendor/bin/sail up -d
+./vendor/bin/sail artisan key:generate
 ```
 
-Boost provides your agent 15+ tools and skills that help agents build Laravel applications while following best practices.
+## Correr migraciones y seeders
 
-## Contributing
+```bash
+# Levantar los contenedores 
+./vendor/bin/sail up -d
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+# Correr las 11 migraciones
+./vendor/bin/sail artisan migrate
 
-## Code of Conduct
+# Poblar la base de datos
+# IMPORTANTE: este paso descarga datos de PokéAPI y tarda ~15-25 minutos
+# la primera vez. Las respuestas se cachean en storage/app/pokeapi-cache/
+# para futuras ejecuciones.
+./vendor/bin/sail php -d memory_limit=1G artisan db:seed
+```
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+> Si el seed se interrumpe, puedes volver a correrlo. La caché en disco y `updateOrCreate` permiten retomar sin duplicar datos.
 
-## Security Vulnerabilities
+## Verificar los datos
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+```bash
+./vendor/bin/sail artisan tinker
+```
 
-## License
+Dentro de Tinker:
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+```php
+App\Models\Pokemon::count();   // ~1300
+App\Models\Trainer::count();   // 500
+App\Models\Move::count();      // ~900
+```
+
+## Ejecutar las consultas demo
+
+Las 5 consultas Eloquent del laboratorio se ejecutan con un solo comando:
+
+```bash
+./vendor/bin/sail artisan pokemon:demo
+```
+
+Imprime en consola:
+
+1. Pokémon legendarios ordenados por ataque
+2. Top 10 pokémon tipo dragón por velocidad
+3. Pokémon con mayor ataque por generación
+4. Top 5 entrenadores con más medallas y sus equipos *(usa eager loading)*
+5. 10 pokémon más populares entre entrenadores
+
+
+## Estructura del proyecto
+
+```
+app/
+├── Models/              # 11 modelos Eloquent (Pokemon, Type, Trainer, etc.)
+├── Services/
+│   └── PokeApiService   # Cliente HTTP con caché para PokéAPI
+└── Console/Commands/
+    └── DemoQueries      # Comando con las 5 consultas demo
+
+database/
+├── migrations/          # 11 migraciones (catálogo + pokemon + pivotes)
+└── seeders/             # Un seeder por tabla principal + DatabaseSeeder
+```
+
+## Comandos útiles
+
+```bash
+# Reiniciar todo desde cero (¡borra datos!)
+./vendor/bin/sail artisan migrate:fresh --seed
+
+# Detener los contenedores
+./vendor/bin/sail down
+
+# Ver logs
+./vendor/bin/sail logs
+```
+
+
