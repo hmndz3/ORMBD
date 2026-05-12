@@ -22,7 +22,8 @@ class DatabaseSeeder extends Seeder
             MoveSeeder::class,
             // Pokémon (usa FKs hacia catálogos + sincroniza pivotes)
             PokemonSeeder::class,
-            // Entrenadores y equipos se agregan en el siguiente commit
+            // Entrenadores con equipos asignados aleatoriamente
+            TrainerSeeder::class,
         ]);
     }
 }
